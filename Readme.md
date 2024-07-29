@@ -11,8 +11,8 @@ This Streamlit application allows users to collect company information from Link
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/linkedin-company-info-collector.git
-   cd linkedin-company-info-collector
+   git clone https://github.com/yourusername/l_scraper.git
+   cd l_scraper
    ```
 
 2. Install the required packages:
