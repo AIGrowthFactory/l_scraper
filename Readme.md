@@ -1,4 +1,4 @@
-# LinkedIn Company Information Collector
+# l_scraper
 
 This Streamlit application allows users to collect company information from LinkedIn and store it in Airtable. It also generates a PDF report for each company.
 
