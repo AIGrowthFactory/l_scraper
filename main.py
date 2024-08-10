@@ -6,6 +6,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 import time
 import requests
 from io import BytesIO
@@ -16,13 +17,10 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
 from textwrap import wrap
 
-# Load environment variables
-load_dotenv()
-
-# Airtable information
-AIRTABLE_BASE_ID = os.getenv('AIRTABLE_BASE_ID')
-AIRTABLE_API_TOKEN = os.getenv('AIRTABLE_API_TOKEN')
-AIRTABLE_TABLE_NAME = os.getenv('AIRTABLE_TABLE_NAME')
+# Airtable bilgileri hesaba göre düzenlenecek.
+AIRTABLE_BASE_ID = 'appCIHUNjRGLIw3uh'
+AIRTABLE_YOUR_SECRET_API_TOKEN = 'patb6iSnO3urlCr64.edde605fb847c133eb55fbdd6907b050eb3a31198f16fecee3b781d5dd751642'
+AIRTABLE_TABLE_NAME = 'py-to-airtable'
 
 endpoint = f'https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_NAME}'
 
@@ -70,27 +68,42 @@ def get_company_info(driver, company_name, company_url):
         st.write(f"Alan bulunamadı: {e}")
 
     try:
+        # Metni bul
         founded_text = driver.find_element(By.CSS_SELECTOR, 'dl.overflow-hidden').text
+
+        # 'Founded' veya 'Kuruluş Yılı' anahtar kelimesini bul ve sonrasındaki yılı çıkar
         if "Founded" in founded_text:
             start_index = founded_text.index("Founded") + len("Founded ")
             founded_year = founded_text[start_index:start_index + 4]
             company_info["Founded"] = founded_year
+        elif "Kuruluş" in founded_text:
+            start_index = founded_text.index("Kuruluş") + len("Kuruluş ")
+            founded_year = founded_text[start_index:start_index + 4]
+            company_info["Founded"] = founded_year
         else:
-            company_info["Founded"] = "Founded bilgisi bulunamadı"
+            company_info["Founded"] = "Founded veya Kuruluş Yılı bilgisi bulunamadı"
     except Exception as e:
         st.write(f"Kuruluş yılı bulunamadı: {e}")
 
     try:
-        founded_text = driver.find_element(By.CSS_SELECTOR, 'dl.overflow-hidden').text
-        if "Headquarters" in founded_text:
-            start_index = founded_text.index("Headquarters") + len("Headquarters ")
-            end_index = founded_text.index("Founded", start_index)
-            headquarters_city = founded_text[start_index:end_index].strip()
+        # Metni bul
+        headquarters_text = driver.find_element(By.CSS_SELECTOR, 'dl.overflow-hidden').text
+
+        # 'Headquarters' veya 'Genel Merkez' anahtar kelimesini bul ve sonrasındaki şehri çıkar
+        if "Headquarters" in headquarters_text:
+            start_index = headquarters_text.index("Headquarters") + len("Headquarters ")
+            # Headquarters bilgisinin bulunduğu satırı ayır
+            headquarters_city = headquarters_text[start_index:].split('\n')[0]
+            company_info["Headquarters"] = headquarters_city
+        elif "Genel Merkez" in headquarters_text:
+            start_index = headquarters_text.index("Genel Merkez") + len("Genel Merkez ")
+            # Genel Merkez bilgisinin bulunduğu satırı ayır
+            headquarters_city = headquarters_text[start_index:].split('\n')[0]
             company_info["Headquarters"] = headquarters_city
         else:
-            company_info["Headquarters"] = "Headquarters bilgisi bulunamadı"
+            company_info["Headquarters"] = "Headquarters veya Genel Merkez bilgisi bulunamadı"
     except Exception as e:
-        st.write(f"Merkez bulunamadı: {e}")
+        st.write(f"Merkez şehir bilgisi bulunamadı: {e}")
 
     return company_info
 
@@ -119,26 +132,33 @@ def add_to_airtable(company_info):
     r = requests.post(endpoint, json=data, headers=headers)
     return r.status_code == 200
 
-# DejavuSans dosyası internetten indirilip,yolu belirtilecek,logo da aynı şekilde.
+
 def create_pdf(company_info):
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
 
-    # Use a default font instead of DejaVuSans
-    pdfmetrics.registerFont(TTFont('Helvetica', 'Helvetica'))
+    pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
 
-    # Remove logo drawing
+    logo_path = 'logo-2.png'
+    logo_width = 150
+    logo_height = 75
+    logo_margin = 30
 
-    c.setFont('Helvetica', 16)
-    text_x = 50
-    y_position = height - 100
+    logo_x = 50
+    logo_y = height - logo_height - logo_margin
+
+    c.drawImage(logo_path, logo_x, logo_y, width=logo_width, height=logo_height)
+
+    c.setFont('DejaVuSans', 16)
+    text_x = logo_x - 20
+    y_position = logo_y - 40
 
     c.setFillColor(colors.darkblue)
     c.drawString(text_x, y_position, f"İsim: {company_info['Name']}")
     y_position -= 25
 
-    c.setFont('Helvetica', 12)
+    c.setFont('DejaVuSans', 12)
     c.setFillColor(colors.black)
     c.drawString(text_x, y_position, f"URL: {company_info['URL']}")
     y_position -= 20
@@ -148,7 +168,7 @@ def create_pdf(company_info):
     y_position -= 20
 
     c.setFillColor(colors.black)
-    c.setFont('Helvetica', 12)
+    c.setFont('DejaVuSans', 12)
     c.drawString(text_x, y_position, "Açıklama:")
     y_position -= 15
 
@@ -164,8 +184,8 @@ def create_pdf(company_info):
 def main():
     st.title("LinkedIn Şirket Bilgileri Toplama")
 
-    linkedin_username = os.getenv('LINKEDIN_USERNAME')
-    linkedin_password = os.getenv('LINKEDIN_PASSWORD')
+    linkedin_username = st.text_input("LinkedIn Kullanıcı Adı")
+    linkedin_password = st.text_input("LinkedIn Şifre", type="password")
     company_name = st.text_input("Şirket İsmi")
     company_url = st.text_input("Şirket URL (Opsiyonel)")
     search_button = st.button("Şirket Bilgilerini Ara")
@@ -177,13 +197,17 @@ def main():
     if 'collected_company_info' not in st.session_state:
         st.session_state.collected_company_info = None
 
+
     if search_button:
         if linkedin_username and linkedin_password and company_name:
             if not st.session_state.driver:
                 options = Options()
-                options.add_argument("--headless")  # Run in headless mode
-                driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-                driver.implicitly_wait(2)
+                options.add_argument("--headless")  # Başsız tarayıcı
+                options.add_argument("--no-sandbox")  # Sandbox'ı devre dışı bırak
+                options.add_argument("--disable-dev-shm-usage")  # Paylaşılan bellek kullanımını devre dışı bırak
+                service = Service(ChromeDriverManager().install())
+                driver = webdriver.Chrome(service=service, options=options)
+                driver.implicitly_wait(2)  # Bekleme süresi artırıldı
                 st.session_state.driver = driver
                 login_to_linkedin(driver, linkedin_username, linkedin_password)
 
@@ -197,7 +221,7 @@ def main():
 
             st.write("Şirket Bilgileri:")
             st.write(f"İsim: {company_info['Name']}")
-            st.write(f"URL: {company_info['URL']}")
+            st.write(f"Linledin: {company_info['URL']}")
             st.write(f"Açıklama: {company_info['Description']}")
             st.write(f"Web Sitesi: {company_info['Website']}")
             st.write(f"Alan: {company_info['Area']}")
@@ -210,11 +234,13 @@ def main():
 
     if st.session_state.collected_company_info:
         pdf_buffer = create_pdf(st.session_state.collected_company_info)
-        sanitized_company_name = st.session_state.collected_company_info['Name'].replace(' ', '_')
+        # Şirket adını dosya adı olarak kullan
+        sanitized_company_name = st.session_state.collected_company_info['Name'].replace(' ',
+                                                                                         '_')
         st.download_button(
             label="PDF İndir",
             data=pdf_buffer,
-            file_name=f"{sanitized_company_name}.pdf",
+            file_name=f"{sanitized_company_name}.pdf",  # Şirket adıyla dosya ismi
             mime="application/pdf"
         )
 
